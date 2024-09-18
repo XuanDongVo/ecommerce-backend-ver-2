@@ -2,6 +2,7 @@ package xuandong.ecommerce_ver_2.controller.product;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
+import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -88,7 +89,7 @@ public class ProductSkuController {
 	}
 	
 	@PostMapping("/add")
-	public ResponseEntity<RestResponse<String>> addProduct(@RequestPart("product") String productJson , @RequestPart("image") MultipartFile file) throws URISyntaxException, IOException {
+	public ResponseEntity<RestResponse<String>> addProduct(@RequestPart("product") String productJson , @RequestPart("imageFiles") List<MultipartFile> file) throws URISyntaxException, IOException {
 		 ObjectMapper objectMapper = new ObjectMapper();
 		 AddProductRequest productRequest = objectMapper.readValue(productJson, AddProductRequest.class);
 		productSkuService.addProduct(productRequest ,file);

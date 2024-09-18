@@ -7,24 +7,20 @@ public class AddProductRequest {
 	private String nameProduct;
 	private String description;
 	private String nameSubCategory;
-	private String color;
-	private List<ProductSkus> productSkus;
-	
-	
+	private List<ProductVariations> productVariations; // Danh sách biến thể sản phẩm
 
 	public AddProductRequest() {
-		super();
 	}
 
-	public AddProductRequest(String nameProduct, String description, String nameSubCategory, String color,
-			List<ProductSkus> productSkus) {
+	public AddProductRequest(String nameProduct, String description, String nameSubCategory,
+			List<ProductVariations> productVariations) {
 		this.nameProduct = nameProduct;
 		this.description = description;
 		this.nameSubCategory = nameSubCategory;
-		this.color = color;
-		this.productSkus = productSkus;
+		this.productVariations = productVariations;
 	}
 
+	// Getters and Setters
 	public String getNameProduct() {
 		return nameProduct;
 	}
@@ -49,20 +45,12 @@ public class AddProductRequest {
 		this.nameSubCategory = nameSubCategory;
 	}
 
-	public String getColor() {
-		return color;
+	public List<ProductVariations> getProductVariations() {
+		return productVariations;
 	}
 
-	public void setColor(String color) {
-		this.color = color;
-	}
-
-	public List<ProductSkus> getProductSkus() {
-		return productSkus;
-	}
-
-	public void setProductSkus(List<ProductSkus> productSkus) {
-		this.productSkus = productSkus;
+	public void setProductVariations(List<ProductVariations> productVariations) {
+		this.productVariations = productVariations;
 	}
 
 }

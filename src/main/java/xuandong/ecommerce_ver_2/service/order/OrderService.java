@@ -23,6 +23,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.transaction.Transactional;
 import xuandong.ecommerce_ver_2.dto.request.OrderRequest;
+import xuandong.ecommerce_ver_2.dto.request.admin.OrderStatusRequest;
 import xuandong.ecommerce_ver_2.dto.response.DetailCartResponse;
 import xuandong.ecommerce_ver_2.entity.CartDetail;
 import xuandong.ecommerce_ver_2.entity.Inventory;
@@ -38,6 +39,7 @@ import xuandong.ecommerce_ver_2.repository.OrderDetailRepository;
 import xuandong.ecommerce_ver_2.repository.OrderRepository;
 import xuandong.ecommerce_ver_2.repository.ProductSkuRepository;
 import xuandong.ecommerce_ver_2.repository.UserRespository;
+import xuandong.ecommerce_ver_2.service.email.EmailService;
 
 @Service
 public class OrderService {
@@ -48,16 +50,20 @@ public class OrderService {
 	private OrderDetailRepository orderDetailRepository;
 	private InventoryRepository inventoryRepository;
 	private ProductSkuRepository productSkuRepository;
+	private EmailService emailService;
+
 
 	public OrderService(OrderRepository orderRepository, UserRespository userRespository,
 			CartDetailRepository cartDetailRepository, OrderDetailRepository orderDetailRepository,
-			InventoryRepository inventoryRepository, ProductSkuRepository productSkuRepository) {
+			InventoryRepository inventoryRepository, ProductSkuRepository productSkuRepository,
+			EmailService emailService) {
 		this.orderRepository = orderRepository;
 		this.userRespository = userRespository;
 		this.cartDetailRepository = cartDetailRepository;
 		this.orderDetailRepository = orderDetailRepository;
 		this.inventoryRepository = inventoryRepository;
 		this.productSkuRepository = productSkuRepository;
+		this.emailService = emailService;
 	}
 
 	@Transactional
@@ -78,7 +84,7 @@ public class OrderService {
 		if (!outOfStockProducts.isEmpty()) {
 			throw new OutOfStockException("Some products are out of stock: " + String.join(", ", outOfStockProducts));
 		}
-		
+
 		cartDetails.forEach(cartDetail -> {
 			OrderDetail orderDetail = new OrderDetail();
 			orderDetail.setOrder(order);
@@ -94,6 +100,44 @@ public class OrderService {
 			cartDetailRepository.delete(cartDetail);
 		});
 
+	}
+
+	@Transactional
+	public void modifyOrderStatus(OrderStatusRequest orderStatusRequest) {
+	    OrderStatus status = orderStatusRequest.getStatus();
+	    
+	    if (status == null) {
+	        throw new IllegalArgumentException("Order status cannot be null");
+	    }
+
+	    switch (status) {
+	        case SUBMIT:
+	            submitOrder(orderStatusRequest);
+	            break;
+
+	        case CANCELLED:
+	            cancelOrder(orderStatusRequest);
+	            break;
+	        default:
+	            throw new UnsupportedOperationException("Unsupported order status: " + status);
+	    }
+	}
+
+
+	private void submitOrder(OrderStatusRequest orderStatusRequest) {
+		Order order = orderRepository.findById(orderStatusRequest.getOrderId())
+				.orElseThrow(() -> new UsernameNotFoundException("Order not found"));
+		order.setOrderStatus(OrderStatus.SUBMIT);
+
+		emailService.sendEmailFromTemplateSync(order, order.getCustomerEmail(),
+				"Cảm ơn bạn đã đặt hàng tại XUAN DONG! Mã đơn hàng #" + order.getId() , "email");
+	}
+	
+	private void cancelOrder(OrderStatusRequest orderStatusRequest) {
+		Order order = orderRepository.findById(orderStatusRequest.getOrderId())
+				.orElseThrow(() -> new UsernameNotFoundException("Order not found"));
+		order.setOrderStatus(OrderStatus.CANCELLED);
+		orderRepository.save(order);
 	}
 
 	private Order createOrder(OrderRequest orderRequest) {

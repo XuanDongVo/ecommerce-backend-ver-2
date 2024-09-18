@@ -26,6 +26,7 @@ import jakarta.transaction.Transactional;
 import xuandong.ecommerce_ver_2.dto.request.MultipleOptionsProductRequest;
 import xuandong.ecommerce_ver_2.dto.request.admin.AddProductRequest;
 import xuandong.ecommerce_ver_2.dto.request.admin.ProductSkus;
+import xuandong.ecommerce_ver_2.dto.request.admin.ProductVariations;
 import xuandong.ecommerce_ver_2.dto.response.ProductDetailResponse;
 import xuandong.ecommerce_ver_2.entity.Category;
 import xuandong.ecommerce_ver_2.entity.Color;
@@ -262,77 +263,92 @@ public class ProductSkuService {
 		return new PageImpl<>(responses, pageable, productPage.getTotalElements());
 
 	}
-
+	
 	@Transactional
-	public void addProduct(AddProductRequest addProductRequest, MultipartFile file)
-			throws URISyntaxException, IOException {
-		if (file == null || file.isEmpty()) {
-			throw new StorageException("File is empty. Please upload a file.");
-		}
+	public void addProduct(AddProductRequest addProductRequest, List<MultipartFile> files) 
+	        throws URISyntaxException, IOException {
+	    if (files == null || files.isEmpty()) {
+	        throw new StorageException("File list is empty. Please upload at least one file.");
+	    }
 
-		// Kiểm tra định dạng file
-		String fileName = file.getOriginalFilename();
-		List<String> allowedExtensions = Arrays.asList("pdf", "jpg", "jpeg", "png");
-		String fileExtension = fileName.substring(fileName.lastIndexOf('.') + 1).toLowerCase();
-		if (!allowedExtensions.contains(fileExtension)) {
-			throw new StorageException("Invalid file extension. Only allows " + allowedExtensions.toString());
-		}
+	    // Tìm và kiểm tra SubCategory
+	    SubCategory subCategory = subCategoryRepository.findByName(addProductRequest.getNameSubCategory())
+	            .orElseThrow(() -> new UsernameNotFoundException("Sub Category not found"));
 
-		// Lưu hình ảnh
-		String pathImage = fileService.store(file);
+	    // Kiểm tra sản phẩm đã tồn tại
+	    Optional<Product> existingProduct = productRepository.findByName(addProductRequest.getNameProduct());
+	    if (existingProduct.isPresent()) {
+	        throw new UserAlreadyExistsException("Tên product này đã tồn tại: " + addProductRequest.getNameProduct());
+	    }
 
-		// Tìm và kiểm tra SubCategory
-		SubCategory subCategory = subCategoryRepository.findByName(addProductRequest.getNameSubCategory())
-				.orElseThrow(() -> new UsernameNotFoundException("Sub Category not found"));
+	    // Tạo mới sản phẩm
+	    Product product = new Product();
+	    product.setName(addProductRequest.getNameProduct());
+	    product.setDescription(addProductRequest.getDescription());
+	    product.setSubCategory(subCategory);
+	    productRepository.save(product);
 
-		// Kiểm tra sản phẩm đã tồn tại
-		Optional<Product> existingProduct = productRepository.findByName(addProductRequest.getNameProduct());
-		if (existingProduct.isPresent()) {
-			throw new UserAlreadyExistsException("Tên product này đã tồn tại: " + addProductRequest.getNameProduct());
-		}
+	    // Xử lý các biến thể sản phẩm
+	    List<ProductVariations> productVariations = addProductRequest.getProductVariations();
+	    if (productVariations.size() != files.size()) {
+	        throw new StorageException("The number of images must match the number of product variations.");
+	    }
 
-		// Tạo mới sản phẩm
-		Product product = new Product();
-		product.setName(addProductRequest.getNameProduct());
-		product.setDescription(addProductRequest.getDescription());
-		product.setSubCategory(subCategory);
-		productRepository.save(product);
+	    List<ProductColorImg> colorImagesToSave = new ArrayList<>();
+	    List<ProductSku> skusToSave = new ArrayList<>();
+	    List<Inventory> inventoriesToSave = new ArrayList<>();
 
-		// Tạo mới ProductColorImg
-		Color color = colorRepository.findByName(addProductRequest.getColor())
-				.orElseThrow(() -> new UsernameNotFoundException("Color not found"));
-		ProductColorImg productColorImg = new ProductColorImg();
-		productColorImg.setProduct(product);
-		productColorImg.setImage(pathImage);
-		productColorImg.setColor(color);
-		productColorImgRepository.save(productColorImg);
+	    for (int i = 0; i < productVariations.size(); i++) {
+	        ProductVariations variation = productVariations.get(i);
+	        MultipartFile file = files.get(i);
 
-		// Tạo mới SKU và kho hàng
-		List<ProductSkus> productSkus = addProductRequest.getProductSkus();
-		List<ProductSku> skusToSave = new ArrayList<>();
-		List<Inventory> inventoriesToSave = new ArrayList<>();
+	        // Kiểm tra định dạng tệp
+	        String fileName = file.getOriginalFilename();
+	        List<String> allowedExtensions = Arrays.asList("pdf", "jpg", "jpeg", "png");
+	        String fileExtension = fileName.substring(fileName.lastIndexOf('.') + 1).toLowerCase();
+	        if (!allowedExtensions.contains(fileExtension)) {
+	            throw new StorageException("Invalid file extension for image: " + fileName + ". Only allows " + allowedExtensions.toString());
+	        }
 
-		for (ProductSkus productSku : productSkus) {
-			Size size = sizeRepository.findByName(productSku.getSize())
-					.orElseThrow(() -> new UsernameNotFoundException("Size not found"));
+	        // Lưu hình ảnh
+	        String pathImage = fileService.store(file);
 
-			ProductSku sku = new ProductSku();
-			sku.setProductColorImg(productColorImg);
-			sku.setPrice(productSku.getPrice());
-			sku.setSize(size);
-			skusToSave.add(sku);
+	        // Kiểm tra màu
+	        Color color = colorRepository.findByName(variation.getColor())
+	                .orElseThrow(() -> new UsernameNotFoundException("Color not found"));
 
-			// Kho hàng
-			Inventory inventory = new Inventory();
-			inventory.setProductSkus(sku);
-			inventory.setStock(productSku.getStock());
-			inventoriesToSave.add(inventory);
-		}
+	        // Tạo ProductColorImg
+	        ProductColorImg productColorImg = new ProductColorImg();
+	        productColorImg.setProduct(product);
+	        productColorImg.setImage(pathImage);
+	        productColorImg.setColor(color);
+	        colorImagesToSave.add(productColorImg);
 
-		// Lưu SKU và kho hàng
-		productSkuRepository.saveAll(skusToSave);
-		inventoryRepository.saveAll(inventoriesToSave);
+	        // Tạo và lưu các SKU tương ứng với biến thể
+	        for (ProductSkus productSku : variation.getProductSkus()) {
+	            Size size = sizeRepository.findByName(productSku.getSize())
+	                    .orElseThrow(() -> new UsernameNotFoundException("Size not found"));
+
+	            ProductSku sku = new ProductSku();
+	            sku.setProductColorImg(productColorImg);
+	            sku.setPrice(productSku.getPrice());
+	            sku.setSize(size);
+	            skusToSave.add(sku);
+
+	            // Kho hàng
+	            Inventory inventory = new Inventory();
+	            inventory.setProductSkus(sku);
+	            inventory.setStock(productSku.getStock());
+	            inventoriesToSave.add(inventory);
+	        }
+	    }
+
+	    // Lưu tất cả ProductColorImg, SKU và Inventory
+	    productColorImgRepository.saveAll(colorImagesToSave);
+	    productSkuRepository.saveAll(skusToSave);
+	    inventoryRepository.saveAll(inventoriesToSave);
 	}
+
 
 	// xóa product gốc
 	public void deleteProduct(String name) {

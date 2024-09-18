@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RestController;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import xuandong.ecommerce_ver_2.dto.request.OrderRequest;
+import xuandong.ecommerce_ver_2.dto.request.admin.OrderStatusRequest;
 import xuandong.ecommerce_ver_2.dto.response.RestResponse;
 import xuandong.ecommerce_ver_2.service.order.OrderService;
 
@@ -27,4 +28,12 @@ public class OrderController {
 		RestResponse<String> response = new RestResponse<>(HttpStatus.CREATED.value(), null, "Create order is successfully", null);
 		return ResponseEntity.ok(response);
 	}
+	
+	@PostMapping("/modify")
+	public ResponseEntity<RestResponse<String>> modifyOrderStatus(@RequestBody OrderStatusRequest orderStatusRequest){
+		orderService.modifyOrderStatus(orderStatusRequest);
+		RestResponse<String> response = new RestResponse<>(HttpStatus.CREATED.value(), null, "Modify order status is successfully", null);
+		return ResponseEntity.ok(response);
+	}
+	
 }
