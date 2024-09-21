@@ -2,12 +2,17 @@ package xuandong.ecommerce_ver_2.service.user;
 
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -28,6 +33,7 @@ import xuandong.ecommerce_ver_2.dto.request.RegisterUserDto;
 import xuandong.ecommerce_ver_2.dto.request.UpdateUserRequest;
 import xuandong.ecommerce_ver_2.dto.response.RestResponse;
 import xuandong.ecommerce_ver_2.dto.response.UserResponse;
+import xuandong.ecommerce_ver_2.dto.response.admin.InformationAccountResponse;
 import xuandong.ecommerce_ver_2.entity.Cart;
 import xuandong.ecommerce_ver_2.entity.Role;
 import xuandong.ecommerce_ver_2.entity.User;
@@ -79,6 +85,28 @@ public class UserService {
 
 		// Gán vai trò cho người dùng
 		assignRoleToUser(user, "ROLE_USER");
+
+		// Tạo giỏ hàng cho người dùng
+		createCartForUser(user);
+	}
+
+	// register staff
+	@Transactional
+	public void registerStaff(RegisterUserDto userDto) {
+		// Kiểm tra xem người dùng đã tồn tại hay chưa
+		Optional<User> currentUser = userRespository.findByEmailOrPhone(userDto.getEmail(), userDto.getPhone());
+
+		if (currentUser.isPresent()) {
+			// Ném ngoại lệ nếu người dùng đã tồn tại
+			throw new UserAlreadyExistsException("Người dùng với email hoặc số điện thoại này đã tồn tại.");
+		}
+
+		// Tạo người dùng mới
+		User user = createUser(userDto);
+		userRespository.save(user);
+
+		// Gán vai trò cho người dùng
+		assignRoleToUser(user, "ROLE_STAFF");
 
 		// Tạo giỏ hàng cho người dùng
 		createCartForUser(user);
@@ -178,14 +206,14 @@ public class UserService {
 		// check refeshToken có phải của user đó
 		User user = userRespository.findByEmailOrPhoneAndRefreshToken(username, username, refreshToken)
 				.orElseThrow(() -> new UsernameNotFoundException("User not found"));
-		
-		// danh sách quyền của user 
+
+		// danh sách quyền của user
 		List<UserRole> userRoles = userRoleRepository.findByUser(user);
 		Collection<GrantedAuthority> authorities = userRoles.stream()
 				.map(userRole -> new SimpleGrantedAuthority(userRole.getRole().getName())).collect(Collectors.toList());
 
 		Authentication authentication = new UsernamePasswordAuthenticationToken(user.getEmail(), null, authorities);
-		 
+
 		// create accessToken
 		String accessToken = jwtService.createAccessToken(authentication);
 		UserResponse loginResponse = new UserResponse(user.getId(), user.getName(), user.getEmail(), user.getPhone(),
@@ -193,6 +221,46 @@ public class UserService {
 
 		return loginResponse;
 
+	}
+
+//	 danh sách người dùng
+	public Page<InformationAccountResponse> getAccountUsers(int currentPage, int pageSize) {
+		Role role = roleRepository.findByName("ROLE_USER")
+				.orElseThrow(() -> new UsernameNotFoundException("Role not found"));
+		return getAccountsByRole(role, currentPage, pageSize);
+	}
+
+	// danh sách nhân viên
+	public Page	<InformationAccountResponse> getAccountStaffs(int currentPage, int pageSize) {
+		Role role = roleRepository.findByName("ROLE_STAFF")
+				.orElseThrow(() -> new UsernameNotFoundException("Role not found"));
+		return getAccountsByRole(role, currentPage, pageSize);
+	}
+
+	private Page<InformationAccountResponse> getAccountsByRole(Role role, int currentPage, int pageSize) {
+		Pageable pageable = PageRequest.of(currentPage - 1, pageSize);
+		Page<UserRole> currentUser = userRoleRepository.findByRole(role, pageable);
+		List<InformationAccountResponse> response = new ArrayList<>();
+
+		currentUser.forEach(userRole -> {
+			User user = userRole.getUser();
+			InformationAccountResponse accountResponse = new InformationAccountResponse();
+			accountResponse.setUserId(user.getId());
+			accountResponse.setEmail(user.getEmail());
+			accountResponse.setAddress(user.getAddress());
+			accountResponse.setName(user.getName());
+			accountResponse.setPhone(user.getPhone());
+			response.add(accountResponse);
+		});
+
+		return new PageImpl<>(response, pageable, currentUser.getTotalElements());
+	}
+	
+
+	// xóa tài khoản nhân
+	public void deleteAccountStaff(Long userId) {
+		User user = userRespository.findById(userId).orElseThrow(() -> new UsernameNotFoundException("user not found"));
+		userRespository.delete(user);
 	}
 
 	private User createUser(RegisterUserDto userDto) {

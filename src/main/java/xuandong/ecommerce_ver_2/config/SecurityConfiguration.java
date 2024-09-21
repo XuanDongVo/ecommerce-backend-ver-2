@@ -6,6 +6,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -15,6 +16,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import xuandong.ecommerce_ver_2.exception.accessDeniedHandler.CustomAccessDeniedHandler;
 
 @Configuration
+@EnableMethodSecurity(prePostEnabled = true) // Thay đổi ở đây
 public class SecurityConfiguration {
 
 	@Autowired
@@ -26,7 +28,8 @@ public class SecurityConfiguration {
 	public SecurityFilterChain filterChain(HttpSecurity res) throws Exception {
 		res.cors(cors -> cors.disable()).csrf(csrf -> csrf.disable())
 				.authorizeHttpRequests(
-						authz -> authz.requestMatchers("/", "/auth/**" , "/storage/**").permitAll().anyRequest().permitAll()
+						authz ->authz.requestMatchers("/admin/**").hasAnyRole("ADMIN" , "STAFF")
+						.requestMatchers("/", "/auth/**" , "/storage/**").permitAll().anyRequest().permitAll()
 									)
 				.exceptionHandling(exception -> exception.accessDeniedHandler(customAccessDeniedHandler)) 
 				.oauth2ResourceServer(oauth2 -> oauth2
